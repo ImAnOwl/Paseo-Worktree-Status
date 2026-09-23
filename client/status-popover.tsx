@@ -3,7 +3,7 @@ import type { PluginButtonContentProps } from "@getpaseo/plugin/client";
 import { useCallback, useMemo } from "react";
 import { Text, View } from "react-native";
 import type { RepositoryStatus, WorktreeStatus } from "../shared/contracts";
-import { CopyButton, shellQuote, TextButton } from "./controls";
+import { CopyButton, shellQuote } from "./controls";
 import { GlyphIcon } from "./glyph-icon";
 import { describeWorktree, formatClockTime, GLYPHS, worktreeName } from "./glyphs";
 import { useRefresh, useWorkspaceStatus } from "./queries";
@@ -18,6 +18,7 @@ function usePopoverStyles(theme: PluginTheme) {
       title: { color: theme.colors.foreground, fontSize: 14, fontWeight: "600" as const },
       text: { color: theme.colors.foreground, fontSize: 13 },
       muted: { color: theme.colors.foregroundMuted, fontSize: 12 },
+      link: { color: theme.colors.accent, fontSize: 13 },
       tint: { color: theme.colors.statusWarning, fontSize: 12 },
       danger: { color: theme.colors.statusDanger, fontSize: 12 },
     }),
@@ -97,24 +98,30 @@ function RepositoryNote({ repository, theme, styles }: RepositoryNoteProps) {
 interface RefreshActionProps {
   workspaceId: string;
   computedAt: string;
-  theme: PluginTheme;
   styles: PopoverStyles;
 }
 
-function RefreshAction({ workspaceId, computedAt, theme, styles }: RefreshActionProps) {
+/**
+ * One flowing text instead of a flex row: popovers size to their content, and Android measured the
+ * row too narrow, clipping both the button and the time.
+ */
+function RefreshAction({ workspaceId, computedAt, styles }: RefreshActionProps) {
   const refresh = useRefresh(workspaceId);
   const runRefresh = useCallback(() => refresh.mutate(), [refresh]);
+  const updated = `  ·  Updated ${formatClockTime(computedAt)}`;
   return (
     <View style={styles.section}>
-      <View style={styles.row}>
-        <TextButton
-          label={refresh.isPending ? "Refreshing..." : "Refresh"}
-          theme={theme}
+      <Text style={styles.muted}>
+        <Text
+          accessibilityRole="button"
+          disabled={refresh.isPending}
           onPress={runRefresh}
-          isDisabled={refresh.isPending}
-        />
-        <Text style={styles.muted}>Updated {formatClockTime(computedAt)}</Text>
-      </View>
+          style={styles.link}
+        >
+          {refresh.isPending ? "Refreshing..." : "Refresh"}
+        </Text>
+        {updated}
+      </Text>
       {refresh.isError ? <Text style={styles.danger}>{refresh.error.message}</Text> : null}
     </View>
   );
@@ -161,12 +168,7 @@ export function StatusPopover({ workspaceId, theme }: PluginButtonContentProps) 
           styles={styles}
         />
       ))}
-      <RefreshAction
-        workspaceId={workspaceId}
-        computedAt={data.computedAt}
-        theme={theme}
-        styles={styles}
-      />
+      <RefreshAction workspaceId={workspaceId} computedAt={data.computedAt} styles={styles} />
     </View>
   );
 }
