@@ -83,6 +83,22 @@ describe("deriveState", () => {
     expect(state).toBe("open");
   });
 
+  it("does not call committed work pushed when there is no remote", () => {
+    const state = deriveState(
+      facts({ integration: integration({ ownCommits: 0, notInBase: 0, notInOrigin: null }) }),
+    );
+    expect(state).toBe("localOnly");
+  });
+
+  it("reports a main checkout without a remote as local only", () => {
+    const state = deriveState(
+      facts({
+        integration: integration({ isBaseBranch: true, hasWorked: null, notInOrigin: null }),
+      }),
+    );
+    expect(state).toBe("localOnly");
+  });
+
   it("reports an unpushed main checkout as merged locally", () => {
     const state = deriveState(
       facts({ integration: integration({ isBaseBranch: true, hasWorked: null, notInOrigin: 6 }) }),

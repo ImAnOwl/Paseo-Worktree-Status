@@ -24,6 +24,7 @@ export const STATE_PRIORITY: readonly WorktreeState[] = [
   "mergedLocal",
   "missing",
   "empty",
+  "localOnly",
   "done",
   "cleaned",
   "unknown",
@@ -64,8 +65,9 @@ function deriveIntegrationState(facts: IntegrationFacts, isRemoved: boolean): Wo
   // Checked before "mergedLocal": a fresh branch cut from an unpushed main contains unpushed commits.
   const isUntouched = facts.ownCommits === 0 && facts.hasWorked === false && !facts.isBaseBranch;
   if (isUntouched) return isRemoved ? "cleaned" : "empty";
-  const isOnlyLocal = facts.notInOrigin !== null && facts.notInOrigin > 0;
-  if (isOnlyLocal) return "mergedLocal";
+  // Without a remote base nothing can be called pushed, however complete the local history is.
+  if (facts.notInOrigin === null) return isRemoved ? "cleaned" : "localOnly";
+  if (facts.notInOrigin > 0) return "mergedLocal";
   return isRemoved ? "cleaned" : "done";
 }
 

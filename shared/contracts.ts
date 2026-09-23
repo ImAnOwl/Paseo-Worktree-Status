@@ -7,6 +7,7 @@ export const WorktreeStateSchema = z.enum([
   "mergedLocal",
   "missing",
   "empty",
+  "localOnly",
   "done",
   "cleaned",
   "unknown",

@@ -22,6 +22,7 @@ offered for copying.
 | `GitPullRequestArrow` | Not merged              | Commits are in neither the local nor the remote base branch   |
 | `CircleArrowUp`       | Merged, main not pushed | The work is in local `main` but not on `origin/main` (tinted) |
 | `CircleDashed`        | No commits yet          | The branch never got a commit                                 |
+| `CloudOff`            | Committed, no remote    | Everything is committed, but there is no `origin` to push to  |
 | `CircleCheck`         | Merged and pushed       | Everything is on `origin/main`; the worktree can be removed   |
 | `CheckCheck`          | Cleaned up              | The worktree is gone and its work is merged                   |
 | `CircleAlert`         | Folder missing          | The folder was deleted but git still lists the worktree       |

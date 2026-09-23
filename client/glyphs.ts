@@ -16,6 +16,7 @@ export const GLYPHS: Record<WorktreeState, Glyph> = {
   mergedLocal: { icon: "CircleArrowUp", tone: "tint", label: "Merged, main not pushed" },
   missing: { icon: "CircleAlert", tone: "muted", label: "Folder missing" },
   empty: { icon: "CircleDashed", tone: "muted", label: "No commits yet" },
+  localOnly: { icon: "CloudOff", tone: "muted", label: "Committed, no remote" },
   done: { icon: "CircleCheck", tone: "muted", label: "Merged and pushed" },
   cleaned: { icon: "CheckCheck", tone: "muted", label: "Cleaned up" },
   unknown: { icon: "CircleHelp", tone: "faint", label: "Status unknown" },
@@ -27,6 +28,7 @@ export const LEGEND_STATES: readonly WorktreeState[] = [
   "open",
   "mergedLocal",
   "empty",
+  "localOnly",
   "done",
   "cleaned",
 ];
@@ -58,6 +60,10 @@ export function describeWorktree(status: WorktreeStatus): string {
       return "Folder was deleted, the worktree entry remains";
     case "empty":
       return `No commits since branching from ${base}`;
+    case "localOnly":
+      return status.isMainCheckout
+        ? `All committed, no origin remote to push to${untrackedNote}`
+        : `In ${base}, no origin remote to push to${untrackedNote}`;
     case "done":
       return `In origin/${base}${untrackedNote}`;
     case "cleaned":
