@@ -13,7 +13,7 @@ import type {
 import { compareStates } from "../shared/state";
 import { TextButton } from "./controls";
 import { GlyphIcon } from "./glyph-icon";
-import { describeWorktree, formatAge, GLYPHS, LEGEND_STATES, worktreeName } from "./glyphs";
+import { describeWorktree, formatClockTime, GLYPHS, LEGEND_STATES, worktreeName } from "./glyphs";
 import { useOverview, useRefresh } from "./queries";
 
 type OpenWorkspace = NonNullable<PluginSurfaceProps["navigation"]>["openWorkspace"];
@@ -253,7 +253,7 @@ export function OverviewSurface({ theme, layout, navigation }: PluginSurfaceProp
   const runRefresh = useCallback(() => refresh.mutate(), [refresh]);
   const openWorkspace = navigation?.openWorkspace ?? null;
   const { data } = overview;
-  const updated = data === undefined ? "" : `Updated ${formatAge(data.computedAt, Date.now())}`;
+  const updated = data === undefined ? "" : `Updated ${formatClockTime(data.computedAt)}`;
   const scanning = data?.isScanning ? " · reading agent activity..." : "";
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>

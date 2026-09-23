@@ -81,9 +81,10 @@ export function worktreeName(status: WorktreeStatus): string {
     : (status.path.split("/").pop() ?? status.path);
 }
 
-export function formatAge(isoTime: string, now: number): string {
-  const seconds = Math.max(0, Math.round((now - Date.parse(isoTime)) / 1000));
-  if (seconds < 5) return "just now";
-  if (seconds < 60) return `${seconds}s ago`;
-  return `${Math.round(seconds / 60)}m ago`;
+/** Local clock time; a relative age would only be recomputed on the next fetch. */
+export function formatClockTime(isoTime: string): string {
+  const time = new Date(isoTime);
+  return [time.getHours(), time.getMinutes(), time.getSeconds()]
+    .map((part) => String(part).padStart(2, "0"))
+    .join(":");
 }

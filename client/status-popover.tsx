@@ -5,7 +5,7 @@ import { Text, View } from "react-native";
 import type { RepositoryStatus, WorktreeStatus } from "../shared/contracts";
 import { CopyButton, shellQuote, TextButton } from "./controls";
 import { GlyphIcon } from "./glyph-icon";
-import { describeWorktree, GLYPHS, worktreeName } from "./glyphs";
+import { describeWorktree, formatClockTime, GLYPHS, worktreeName } from "./glyphs";
 import { useRefresh, useWorkspaceStatus } from "./queries";
 
 function usePopoverStyles(theme: PluginTheme) {
@@ -96,21 +96,25 @@ function RepositoryNote({ repository, theme, styles }: RepositoryNoteProps) {
 
 interface RefreshActionProps {
   workspaceId: string;
+  computedAt: string;
   theme: PluginTheme;
   styles: PopoverStyles;
 }
 
-function RefreshAction({ workspaceId, theme, styles }: RefreshActionProps) {
+function RefreshAction({ workspaceId, computedAt, theme, styles }: RefreshActionProps) {
   const refresh = useRefresh(workspaceId);
   const runRefresh = useCallback(() => refresh.mutate(), [refresh]);
   return (
     <View style={styles.section}>
-      <TextButton
-        label={refresh.isPending ? "Refreshing..." : "Refresh"}
-        theme={theme}
-        onPress={runRefresh}
-        isDisabled={refresh.isPending}
-      />
+      <View style={styles.row}>
+        <TextButton
+          label={refresh.isPending ? "Refreshing..." : "Refresh"}
+          theme={theme}
+          onPress={runRefresh}
+          isDisabled={refresh.isPending}
+        />
+        <Text style={styles.muted}>Updated {formatClockTime(computedAt)}</Text>
+      </View>
       {refresh.isError ? <Text style={styles.danger}>{refresh.error.message}</Text> : null}
     </View>
   );
@@ -157,7 +161,12 @@ export function StatusPopover({ workspaceId, theme }: PluginButtonContentProps) 
           styles={styles}
         />
       ))}
-      <RefreshAction workspaceId={workspaceId} theme={theme} styles={styles} />
+      <RefreshAction
+        workspaceId={workspaceId}
+        computedAt={data.computedAt}
+        theme={theme}
+        styles={styles}
+      />
     </View>
   );
 }
