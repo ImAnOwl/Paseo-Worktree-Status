@@ -1,7 +1,6 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import type { PluginButtonContentProps } from "@getpaseo/plugin/client";
 import { useSettings } from "@getpaseo/plugin/client";
-import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type {
@@ -14,7 +13,7 @@ import { linkSettings } from "../shared/settings";
 import { CopyButton, shellQuote, TextButton } from "./controls";
 import { GlyphIcon } from "./glyph-icon";
 import { describeWorktree, GLYPHS, worktreeName } from "./glyphs";
-import { QUERY_ROOT, useCandidates, useRefresh, useWorkspaceStatus } from "./queries";
+import { useCandidates, useRefresh, useWorkspaceStatus } from "./queries";
 
 type Choice = "automatic" | "none" | "worktree";
 
@@ -157,7 +156,7 @@ interface LinkPickerProps {
 function LinkPicker({ workspaceId, styles, onDone }: LinkPickerProps) {
   const candidates = useCandidates(workspaceId, true);
   const settings = useSettings(linkSettings);
-  const queryClient = useQueryClient();
+  // Saving updates the settings everywhere, which changes the status query keys and refetches.
   const choose = useCallback(
     async (choice: Choice, path: string | null) => {
       if (settings.status !== "ready") return;
@@ -168,11 +167,9 @@ function LinkPicker({ workspaceId, styles, onDone }: LinkPickerProps) {
       const overrides =
         choice === "automatic" ? others : { ...others, [workspaceId]: { worktrees } };
       const isSaved = await settings.save({ overrides }, settings.revision);
-      if (!isSaved) return;
-      await queryClient.invalidateQueries({ queryKey: [QUERY_ROOT] });
-      onDone();
+      if (isSaved) onDone();
     },
-    [settings, workspaceId, queryClient, onDone],
+    [settings, workspaceId, onDone],
   );
   const handleChoose = useCallback(
     (choice: Choice, path: string | null) => void choose(choice, path),

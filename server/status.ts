@@ -1,8 +1,4 @@
-import type {
-  PluginLifecycleEvents,
-  PluginSettings,
-  PluginSettingsState,
-} from "@getpaseo/plugin/server";
+import type { PluginLifecycleEvents } from "@getpaseo/plugin/server";
 import type {
   Overview,
   OverviewRow,
@@ -12,7 +8,6 @@ import type {
   WorktreeCandidate,
   WorktreeStatus,
 } from "../shared/contracts";
-import type { linkSettings, LinkSettings } from "../shared/settings";
 import { aggregateStates, compareStates } from "../shared/state";
 import { discoverRepositories } from "./discovery";
 import type { EvidenceRoots, TimelineItem } from "./evidence";
@@ -39,18 +34,22 @@ const TIMELINE_PAGE_SIZE = 500;
 const MAX_TIMELINE_PAGES = 4;
 const NO_CHANGES = { modified: 0, untracked: 0, conflicted: 0 };
 
-type Overrides = LinkSettings["overrides"];
+/** Manual links by workspace id, as sent by the client. */
+export type Overrides = Readonly<Record<string, readonly string[]>>;
 type TurnEnded = PluginLifecycleEvents["agent.turn_ended"];
 
 export interface StatusServiceOptions {
-  settings: PluginSettings<typeof linkSettings.schema>;
   cache: LinkCache;
   home: string;
 }
 
 export interface StatusService {
-  workspaceStatus(paseo: Paseo, workspaceId: string): Promise<WorkspaceStatus>;
-  overview(paseo: Paseo): Promise<Overview>;
+  workspaceStatus(
+    paseo: Paseo,
+    workspaceId: string,
+    override: readonly string[] | null,
+  ): Promise<WorkspaceStatus>;
+  overview(paseo: Paseo, overrides: Overrides): Promise<Overview>;
   refresh(paseo: Paseo, workspaceId: string | null): Promise<{ refreshedAt: string }>;
   candidates(paseo: Paseo, workspaceId: string): Promise<{ worktrees: WorktreeCandidate[] }>;
   onTurnEnded(paseo: Paseo, event: TurnEnded): Promise<void>;
@@ -63,12 +62,6 @@ interface TaskView {
   agents: TaskAgent[];
   repositories: Repository[];
   links: Link[];
-}
-
-function readOverrides(state: PluginSettingsState<typeof linkSettings.schema>): Overrides {
-  if (state.status === "ready") return state.values.overrides;
-  console.error(`[worktree-status] ignoring invalid link settings: ${state.error}`);
-  return {};
 }
 
 function evidenceRoots(repositories: readonly Repository[]): EvidenceRoots {
@@ -105,11 +98,7 @@ function sortRows(rows: OverviewRow[]): OverviewRow[] {
   );
 }
 
-export function createStatusService({
-  settings,
-  cache,
-  home,
-}: StatusServiceOptions): StatusService {
+export function createStatusService({ cache, home }: StatusServiceOptions): StatusService {
   const taskMemo = createMemo<Task[]>(LIST_TTL_MS);
   const agentMemo = createMemo<TaskAgent[]>(LIST_TTL_MS);
   const discoveryMemo = createMemo<string[]>(DISCOVERY_TTL_MS);
@@ -118,15 +107,6 @@ export function createStatusService({
   const scannedAgents = new Set<string>();
   const scanningTasks = new Set<string>();
   let backfillQueue: Promise<void> = Promise.resolve();
-  let overrides: Promise<Overrides> | null = null;
-  const stopSettings = settings.subscribe((state) => {
-    overrides = Promise.resolve(readOverrides(state));
-  });
-
-  function currentOverrides(): Promise<Overrides> {
-    overrides ??= settings.read().then(readOverrides);
-    return overrides;
-  }
 
   async function repositoriesIn(directory: string): Promise<Repository[]> {
     const roots = await discoveryMemo.get(directory, () => discoverRepositories(directory));
@@ -147,9 +127,12 @@ export function createStatusService({
     });
   }
 
-  async function viewTask(task: Task, agents: readonly TaskAgent[]): Promise<TaskView> {
+  async function viewTask(
+    task: Task,
+    agents: readonly TaskAgent[],
+    override: readonly string[] | undefined,
+  ): Promise<TaskView> {
     const repositories = await repositoriesIn(task.directory);
-    const override = (await currentOverrides())[task.id]?.worktrees;
     const taskAgents = agents.filter((agent) => agent.workspaceId === task.id);
     const evidence = combineEvidence(cache.evidenceFor(task.id));
     const links = resolveLinks({ task, repositories, agents: taskAgents, override, evidence });
@@ -241,12 +224,12 @@ export function createStatusService({
     return section.rows.length > 0 || (section.repository.unpushedCommits ?? 0) > 0;
   }
 
-  async function allViews(paseo: Paseo): Promise<TaskView[]> {
+  async function allViews(paseo: Paseo, overrides: Overrides): Promise<TaskView[]> {
     const [tasks, agents] = await Promise.all([
       taskMemo.get("all", () => loadTasks(paseo)),
       agentMemo.get("all", () => loadAgents(paseo)),
     ]);
-    return Promise.all(tasks.map((task) => viewTask(task, agents)));
+    return Promise.all(tasks.map((task) => viewTask(task, agents, overrides[task.id])));
   }
 
   function clearGitCaches(): void {
@@ -256,7 +239,7 @@ export function createStatusService({
   }
 
   return {
-    async workspaceStatus(paseo, workspaceId) {
+    async workspaceStatus(paseo, workspaceId, override) {
       const computedAt = new Date().toISOString();
       const task = await findTask(paseo, workspaceId);
       if (task === null) {
@@ -271,7 +254,7 @@ export function createStatusService({
         };
       }
       const agents = await agentMemo.get("all", () => loadAgents(paseo));
-      const view = await viewTask(task, agents);
+      const view = await viewTask(task, agents, override ?? undefined);
       const isScanning = scheduleBackfill(paseo, view);
       const worktrees = await Promise.all(
         view.links.map((link) => statusForLink(link, view.repositories)),
@@ -293,9 +276,9 @@ export function createStatusService({
       };
     },
 
-    async overview(paseo) {
+    async overview(paseo, overrides) {
       const computedAt = new Date().toISOString();
-      const views = await allViews(paseo);
+      const views = await allViews(paseo, overrides);
       const scanning = views.map((view) => scheduleBackfill(paseo, view));
       const repositories = new Map(
         views
@@ -372,7 +355,6 @@ export function createStatusService({
     },
 
     async dispose() {
-      await stopSettings();
       await cache.flush();
     },
   };

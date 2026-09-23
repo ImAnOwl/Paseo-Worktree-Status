@@ -7,21 +7,24 @@ import type { StatusService } from "./server/status";
 import { createStatusService } from "./server/status";
 
 export default function contribute(server: PluginServerContext) {
-  const settings = server.registerSettings(linkSettings);
+  // Registration alone makes Paseo serve the settings document to the client.
+  server.registerSettings(linkSettings);
   let service: Promise<StatusService> | null = null;
 
   // The cache file is read on first use so a slow disk never delays plugin startup.
   function getService(): Promise<StatusService> {
     service ??= openLinkCache(defaultLinkCachePath()).then((cache) =>
-      createStatusService({ settings, cache, home: os.homedir() }),
+      createStatusService({ cache, home: os.homedir() }),
     );
     return service;
   }
 
-  server.handle(workspaceStatusRpc, async ({ workspaceId }, { paseo }) =>
-    (await getService()).workspaceStatus(paseo, workspaceId),
+  server.handle(workspaceStatusRpc, async ({ workspaceId, override }, { paseo }) =>
+    (await getService()).workspaceStatus(paseo, workspaceId, override),
   );
-  server.handle(overviewRpc, async (_input, { paseo }) => (await getService()).overview(paseo));
+  server.handle(overviewRpc, async ({ overrides }, { paseo }) =>
+    (await getService()).overview(paseo, overrides),
+  );
   server.handle(refreshRpc, async ({ workspaceId }, { paseo }) =>
     (await getService()).refresh(paseo, workspaceId),
   );

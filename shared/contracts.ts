@@ -99,15 +99,18 @@ export const WorktreeCandidateSchema = z.object({
 });
 export type WorktreeCandidate = z.infer<typeof WorktreeCandidateSchema>;
 
+/** Worktrees chosen by hand; null means the plugin links the task automatically. */
+export const LinkOverrideSchema = z.array(z.string()).nullable();
+
 export const workspaceStatusRpc = defineRpc({
   name: "status.workspace",
-  input: z.object({ workspaceId: z.string() }),
+  input: z.object({ workspaceId: z.string(), override: LinkOverrideSchema }),
   output: WorkspaceStatusSchema,
 });
 
 export const overviewRpc = defineRpc({
   name: "status.overview",
-  input: z.object({}),
+  input: z.object({ overrides: z.record(z.string(), z.array(z.string())) }),
   output: OverviewSchema,
 });
 

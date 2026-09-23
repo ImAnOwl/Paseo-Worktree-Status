@@ -1,13 +1,27 @@
-import type { OwnedSubscription, PaseoWorkspaceListResult } from "@getpaseo/client";
 import type { PluginButtonRegistration, PluginClientContext } from "@getpaseo/plugin/client";
 import { StatusIcon } from "./status-icon";
 import { StatusPopover } from "./status-popover";
 
-/** Header buttons are per workspace, so they follow the live workspace list. */
+const PAGE_LIMIT = 200;
+
+async function listWorkspaceIds(client: PluginClientContext): Promise<string[]> {
+  const ids: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await client.paseo.workspaces.list({ page: { limit: PAGE_LIMIT, cursor } });
+    for (const workspace of page.entries) ids.push(workspace.id);
+    cursor = page.pageInfo.hasMore ? (page.pageInfo.nextCursor ?? undefined) : undefined;
+  } while (cursor !== undefined);
+  return ids;
+}
+
+/**
+ * Header buttons are per workspace, so they follow the workspace list. The app already streams
+ * workspace updates for its sidebar; listening to that stream works on Paseo 0.8 and later,
+ * unlike owning a subscription, which 0.8 apps do not return.
+ */
 export function registerHeaderButtons(client: PluginClientContext): () => void {
   const registrations = new Map<string, PluginButtonRegistration>();
-  let subscription: OwnedSubscription<PaseoWorkspaceListResult> | null = null;
-  let stopObserving: (() => void) | null = null;
   let isStopped = false;
 
   function ensure(workspaceId: string): void {
@@ -30,38 +44,23 @@ export function registerHeaderButtons(client: PluginClientContext): () => void {
     registrations.delete(workspaceId);
   }
 
-  function sync(workspaceIds: readonly string[]): void {
-    const current = new Set(workspaceIds);
-    for (const workspaceId of registrations.keys()) {
-      if (!current.has(workspaceId)) drop(workspaceId);
-    }
-    for (const workspaceId of current) ensure(workspaceId);
-  }
+  const stopListening = client.paseo.workspaces.subscribe((update) => {
+    if (update.kind === "remove") drop(update.id);
+    else ensure(update.workspace.id);
+  });
 
-  client.paseo.workspaces
-    .list({ subscribe: {} })
-    .then((result) => {
-      if (isStopped) return result.subscription.release();
-      subscription = result.subscription;
-      sync(result.entries.map((workspace) => workspace.id));
-      stopObserving = result.subscription.subscribe({
-        snapshot: (snapshot) => sync(snapshot.entries.map((workspace) => workspace.id)),
-        update: (message) => {
-          if (message.type !== "workspace_update") return;
-          if (message.payload.kind === "remove") drop(message.payload.id);
-          else ensure(message.payload.workspace.id);
-        },
-      });
+  listWorkspaceIds(client)
+    .then((ids) => {
+      for (const id of ids) ensure(id);
       return undefined;
     })
     .catch((error: unknown) => {
-      console.error("[worktree-status] could not follow the workspace list", error);
+      console.error("[worktree-status] could not list workspaces", error);
     });
 
   return () => {
     isStopped = true;
-    stopObserving?.();
-    void subscription?.release();
+    stopListening();
     for (const registration of registrations.values()) registration.remove();
     registrations.clear();
   };

@@ -2,6 +2,6 @@
   "id": "worktree-status",
   "description": "Git status of each task's worktree at a glance",
   "requirements": {
-    "paseo": ">=0.9.1"
+    "paseo": ">=0.8.0"
   }
 }
