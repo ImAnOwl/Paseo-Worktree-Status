@@ -63,7 +63,7 @@ Plugins run unsandboxed on the daemon machine, so Paseo requires **Settings → 
 plugins** first. Then:
 
 ```bash
-paseo plugin install github:<owner>/paseo-worktree-status
+paseo plugin install github:ImAnOwl/paseo-worktree-status
 ```
 
 Requires Paseo 0.8.0 or later (daemon and app) and git 2.31 or later on the daemon host.

@@ -9,8 +9,16 @@
     "paseo-plugin",
     "worktree"
   ],
+  "homepage": "https://github.com/ImAnOwl/paseo-worktree-status#readme",
+  "bugs": {
+    "url": "https://github.com/ImAnOwl/paseo-worktree-status/issues"
+  },
   "license": "MIT",
   "author": "Oliver Czempas <oliver@czempas.de>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ImAnOwl/paseo-worktree-status.git"
+  },
   "files": [
     "paseo-plugin.json",
     "index.client.tsx",
