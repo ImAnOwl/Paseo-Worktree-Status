@@ -87,14 +87,19 @@ async function readRefs(root: string): Promise<Map<string, string>> {
   return refs;
 }
 
-/** Same order as Paseo: origin/HEAD first, then a local main or master. */
+/**
+ * Same order as Paseo: origin/HEAD first, then a local main or master. Repositories without
+ * either fall back to whatever the main checkout has checked out.
+ */
 async function resolveBaseName(
   root: string,
   refs: ReadonlyMap<string, string>,
+  worktrees: readonly WorktreeEntry[],
 ): Promise<string | null> {
   const originHead = await probeGit(root, ["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"]);
   if (originHead.exitCode === 0) return originHead.stdout.trim().replace(ORIGIN_PREFIX, "");
-  return FALLBACK_BASE_NAMES.find((name) => refs.has(BRANCH_PREFIX + name)) ?? null;
+  const conventional = FALLBACK_BASE_NAMES.find((name) => refs.has(BRANCH_PREFIX + name));
+  return conventional ?? worktrees.find((entry) => entry.isMain)?.branch ?? null;
 }
 
 export function toBaseBranch(name: string, refs: ReadonlyMap<string, string>): BaseBranch {
@@ -121,7 +126,7 @@ function findContainers(root: string, worktrees: readonly WorktreeEntry[]): stri
 
 export async function readRepository(root: string): Promise<Repository> {
   const [worktrees, refs] = await Promise.all([readWorktrees(root), readRefs(root)]);
-  const baseName = await resolveBaseName(root, refs);
+  const baseName = await resolveBaseName(root, refs, worktrees);
   const base = baseName === null ? null : toBaseBranch(baseName, refs);
   return {
     root,
