@@ -49,13 +49,9 @@ export const RepositoryStatusSchema = z.object({
 });
 export type RepositoryStatus = z.infer<typeof RepositoryStatusSchema>;
 
-export const LinkSourceSchema = z.enum(["manual", "workspace", "agent", "timeline"]);
-export type LinkSource = z.infer<typeof LinkSourceSchema>;
-
 export const WorkspaceStatusSchema = z.object({
   workspaceId: z.string(),
   state: WorktreeStateSchema,
-  linkSource: LinkSourceSchema.nullable(),
   isScanning: z.boolean(),
   worktrees: z.array(WorktreeStatusSchema),
   repositories: z.array(RepositoryStatusSchema),
@@ -92,26 +88,15 @@ export const OverviewSchema = z.object({
 });
 export type Overview = z.infer<typeof OverviewSchema>;
 
-export const WorktreeCandidateSchema = z.object({
-  path: z.string(),
-  branch: z.string().nullable(),
-  repositoryName: z.string(),
-  isMainCheckout: z.boolean(),
-});
-export type WorktreeCandidate = z.infer<typeof WorktreeCandidateSchema>;
-
-/** Worktrees chosen by hand; null means the plugin links the task automatically. */
-export const LinkOverrideSchema = z.array(z.string()).nullable();
-
 export const workspaceStatusRpc = defineRpc({
   name: "status.workspace",
-  input: z.object({ workspaceId: z.string(), override: LinkOverrideSchema }),
+  input: z.object({ workspaceId: z.string() }),
   output: WorkspaceStatusSchema,
 });
 
 export const overviewRpc = defineRpc({
   name: "status.overview",
-  input: z.object({ overrides: z.record(z.string(), z.array(z.string())) }),
+  input: z.object({}),
   output: OverviewSchema,
 });
 
@@ -119,10 +104,4 @@ export const refreshRpc = defineRpc({
   name: "status.refresh",
   input: z.object({ workspaceId: z.string().nullable() }),
   output: z.object({ refreshedAt: z.string() }),
-});
-
-export const candidatesRpc = defineRpc({
-  name: "worktrees.candidates",
-  input: z.object({ workspaceId: z.string() }),
-  output: z.object({ worktrees: z.array(WorktreeCandidateSchema) }),
 });

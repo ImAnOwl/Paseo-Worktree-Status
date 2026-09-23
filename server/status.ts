@@ -5,7 +5,6 @@ import type {
   OverviewSection,
   RepositoryStatus,
   WorkspaceStatus,
-  WorktreeCandidate,
   WorktreeStatus,
 } from "../shared/contracts";
 import { aggregateStates, compareStates } from "../shared/state";
@@ -34,8 +33,6 @@ const TIMELINE_PAGE_SIZE = 500;
 const MAX_TIMELINE_PAGES = 4;
 const NO_CHANGES = { modified: 0, untracked: 0, conflicted: 0 };
 
-/** Manual links by workspace id, as sent by the client. */
-export type Overrides = Readonly<Record<string, readonly string[]>>;
 type TurnEnded = PluginLifecycleEvents["agent.turn_ended"];
 
 export interface StatusServiceOptions {
@@ -44,14 +41,9 @@ export interface StatusServiceOptions {
 }
 
 export interface StatusService {
-  workspaceStatus(
-    paseo: Paseo,
-    workspaceId: string,
-    override: readonly string[] | null,
-  ): Promise<WorkspaceStatus>;
-  overview(paseo: Paseo, overrides: Overrides): Promise<Overview>;
+  workspaceStatus(paseo: Paseo, workspaceId: string): Promise<WorkspaceStatus>;
+  overview(paseo: Paseo): Promise<Overview>;
   refresh(paseo: Paseo, workspaceId: string | null): Promise<{ refreshedAt: string }>;
-  candidates(paseo: Paseo, workspaceId: string): Promise<{ worktrees: WorktreeCandidate[] }>;
   onTurnEnded(paseo: Paseo, event: TurnEnded): Promise<void>;
   onWorkspaceArchived(): void;
   dispose(): Promise<void>;
@@ -127,15 +119,11 @@ export function createStatusService({ cache, home }: StatusServiceOptions): Stat
     });
   }
 
-  async function viewTask(
-    task: Task,
-    agents: readonly TaskAgent[],
-    override: readonly string[] | undefined,
-  ): Promise<TaskView> {
+  async function viewTask(task: Task, agents: readonly TaskAgent[]): Promise<TaskView> {
     const repositories = await repositoriesIn(task.directory);
     const taskAgents = agents.filter((agent) => agent.workspaceId === task.id);
     const evidence = combineEvidence(cache.evidenceFor(task.id));
-    const links = resolveLinks({ task, repositories, agents: taskAgents, override, evidence });
+    const links = resolveLinks({ task, repositories, agents: taskAgents, evidence });
     return { task, agents: taskAgents, repositories, links };
   }
 
@@ -224,12 +212,12 @@ export function createStatusService({ cache, home }: StatusServiceOptions): Stat
     return section.rows.length > 0 || (section.repository.unpushedCommits ?? 0) > 0;
   }
 
-  async function allViews(paseo: Paseo, overrides: Overrides): Promise<TaskView[]> {
+  async function allViews(paseo: Paseo): Promise<TaskView[]> {
     const [tasks, agents] = await Promise.all([
       taskMemo.get("all", () => loadTasks(paseo)),
       agentMemo.get("all", () => loadAgents(paseo)),
     ]);
-    return Promise.all(tasks.map((task) => viewTask(task, agents, overrides[task.id])));
+    return Promise.all(tasks.map((task) => viewTask(task, agents)));
   }
 
   function clearGitCaches(): void {
@@ -239,14 +227,13 @@ export function createStatusService({ cache, home }: StatusServiceOptions): Stat
   }
 
   return {
-    async workspaceStatus(paseo, workspaceId, override) {
+    async workspaceStatus(paseo, workspaceId) {
       const computedAt = new Date().toISOString();
       const task = await findTask(paseo, workspaceId);
       if (task === null) {
         return {
           workspaceId,
           state: "none",
-          linkSource: null,
           isScanning: false,
           worktrees: [],
           repositories: [],
@@ -254,7 +241,7 @@ export function createStatusService({ cache, home }: StatusServiceOptions): Stat
         };
       }
       const agents = await agentMemo.get("all", () => loadAgents(paseo));
-      const view = await viewTask(task, agents, override ?? undefined);
+      const view = await viewTask(task, agents);
       const isScanning = scheduleBackfill(paseo, view);
       const worktrees = await Promise.all(
         view.links.map((link) => statusForLink(link, view.repositories)),
@@ -268,7 +255,6 @@ export function createStatusService({ cache, home }: StatusServiceOptions): Stat
       return {
         workspaceId,
         state: aggregateStates(worktrees.map((status) => status.state)),
-        linkSource: view.links[0]?.source ?? null,
         isScanning,
         worktrees,
         repositories,
@@ -276,9 +262,9 @@ export function createStatusService({ cache, home }: StatusServiceOptions): Stat
       };
     },
 
-    async overview(paseo, overrides) {
+    async overview(paseo) {
       const computedAt = new Date().toISOString();
-      const views = await allViews(paseo, overrides);
+      const views = await allViews(paseo);
       const scanning = views.map((view) => scheduleBackfill(paseo, view));
       const repositories = new Map(
         views
@@ -310,23 +296,6 @@ export function createStatusService({ cache, home }: StatusServiceOptions): Stat
         }
       }
       return { refreshedAt: new Date().toISOString() };
-    },
-
-    async candidates(paseo, workspaceId) {
-      const task = await findTask(paseo, workspaceId);
-      if (task === null) return { worktrees: [] };
-      const repositories = await repositoriesIn(task.directory);
-      const worktrees = repositories.flatMap((repository) =>
-        repository.worktrees
-          .filter((entry) => !entry.isPrunable)
-          .map((entry) => ({
-            path: entry.path,
-            branch: entry.branch,
-            repositoryName: repository.name,
-            isMainCheckout: entry.isMain,
-          })),
-      );
-      return { worktrees };
     },
 
     async onTurnEnded(paseo, { agent, timeline }) {

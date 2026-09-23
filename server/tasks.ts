@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { PluginHandlerContext } from "@getpaseo/plugin/server";
-import type { LinkSource, WorktreeStatus } from "../shared/contracts";
+import type { WorktreeStatus } from "../shared/contracts";
 import type { Evidence } from "./evidence";
 import { selectLinks } from "./evidence";
 import type { WorktreeTarget } from "./facts";
@@ -23,7 +23,6 @@ export interface TaskAgent {
 
 export interface Link {
   path: string;
-  source: LinkSource;
   branch: string | null;
 }
 
@@ -31,7 +30,6 @@ export interface LinkQuery {
   task: Task;
   repositories: readonly Repository[];
   agents: readonly TaskAgent[];
-  override: readonly string[] | undefined;
   evidence: Evidence;
 }
 
@@ -94,45 +92,37 @@ function findContaining(target: string, candidates: Iterable<string>): string | 
   return best;
 }
 
-function toLinks(paths: readonly string[], source: LinkSource): Link[] {
-  return [...new Set(paths)].map((worktree) => ({ path: worktree, source, branch: null }));
+function toLinks(paths: readonly string[]): Link[] {
+  return [...new Set(paths)].map((worktree) => ({ path: worktree, branch: null }));
 }
 
 /**
- * Explicit choices beat inference: a manual link, then a task that is itself a worktree, then
- * agents started inside one, then timeline evidence, and the main checkout only as a last resort.
+ * Direct facts beat inference: a task that is itself a worktree, then agents started inside one,
+ * then timeline evidence, and the main checkout only as a last resort.
  */
-export function resolveLinks({
-  task,
-  repositories,
-  agents,
-  override,
-  evidence,
-}: LinkQuery): Link[] {
-  if (override !== undefined) return toLinks(override, "manual");
+export function resolveLinks({ task, repositories, agents, evidence }: LinkQuery): Link[] {
   const entries = repositories.flatMap((repository) => repository.worktrees);
   const linkedWorktrees = entries.filter((entry) => !entry.isMain).map((entry) => entry.path);
   const mainCheckouts = new Set(entries.filter((entry) => entry.isMain).map((entry) => entry.path));
 
   const ownWorktree = findContaining(task.directory, linkedWorktrees);
-  if (ownWorktree !== null) return toLinks([ownWorktree], "workspace");
+  if (ownWorktree !== null) return toLinks([ownWorktree]);
 
   const agentWorktrees = agents
     .map((agent) => findContaining(agent.cwd, linkedWorktrees))
     .filter((worktree) => worktree !== null);
-  if (agentWorktrees.length > 0) return toLinks(agentWorktrees, "agent");
+  if (agentWorktrees.length > 0) return toLinks(agentWorktrees);
 
   const timelineLinks = selectLinks(evidence, mainCheckouts);
   if (timelineLinks.length > 0) {
     return timelineLinks.map((link) => ({
       path: link.path,
-      source: "timeline",
       branch: link.branch,
     }));
   }
 
   const mainCheckout = findContaining(task.directory, mainCheckouts);
-  return mainCheckout === null ? [] : toLinks([mainCheckout], "workspace");
+  return mainCheckout === null ? [] : toLinks([mainCheckout]);
 }
 
 function findBranchForSlug(repository: Repository, slug: string): string | null {

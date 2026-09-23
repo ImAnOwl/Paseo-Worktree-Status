@@ -9,7 +9,7 @@ and wondering later why the feature is not live.
 ## What you get
 
 - **Header icon.** Every workspace header gets a small monochrome icon for its worktree state. Open
-  it to see the details, copy the push or cleanup command, or pick the worktree by hand.
+  it to see the details, copy the push or cleanup command, or refresh.
 - **Worktrees overview.** A sidebar entry lists every repository with its tasks and with worktrees
   that no task claims anymore, most urgent first.
 
@@ -46,16 +46,15 @@ an equivalent patch there. Cherry-picked and rebased work is recognized; squash 
 
 **Which worktree belongs to a task.** In this order:
 
-1. A worktree you picked by hand in the header popover
-2. The workspace folder, when it is a worktree
-3. An agent started inside a worktree
-4. Agent activity: `cd` into a worktree, edits below it, or the `git worktree add` that created it.
+1. The workspace folder, when it is a worktree
+2. An agent started inside a worktree
+3. Agent activity: `cd` into a worktree, edits below it, or the `git worktree add` that created it.
    Tool output such as `git worktree list` is ignored.
-5. The main checkout, when the task lives there
+4. The main checkout, when the task lives there
 
 Agent activity is read when a turn ends. Agents that are still open are read once in the
 background; closed agents are not, because reading their timeline would resume their session.
-Link those tasks by hand if you need them.
+Their worktrees still appear in the overview, listed as worktrees without a task.
 
 ## Install
 
@@ -81,8 +80,10 @@ paseo plugin logs worktree-status
 Formatting and lint rules follow the Paseo repository (oxfmt, oxlint); lefthook runs them before
 each commit. Tests use real git repositories in a temporary folder.
 
-Inferred links are cached in `$PASEO_HOME/plugin-data/worktree-status/links.json`; manual links
-are stored as plugin settings.
+Inferred links are cached in `$PASEO_HOME/plugin-data/worktree-status/links.json`.
+
+Status refreshes every 20 seconds while an agent runs and every 30 seconds otherwise, also while
+the app is in the background, and right after each agent turn.
 
 ## License
 
